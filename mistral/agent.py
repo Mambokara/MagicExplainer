@@ -85,7 +85,7 @@ def chat_with_agent(message):
     response = client_aws.invoke_agent(
         agentId=agent_id,
         agentAliasId=alias_id,
-        sessionId="uniqueID-2",
+        sessionId="uniqueID",
         inputText=message,
     )
 
