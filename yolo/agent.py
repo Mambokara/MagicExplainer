@@ -1,4 +1,9 @@
 import os
+import threading
+import time
+import itertools
+import sys
+import io
 from dotenv import load_dotenv
 import boto3
 import mimetypes
@@ -9,7 +14,15 @@ from ultralytics import YOLO
 import cv2
 import easyocr
 
-reader = easyocr.Reader(['fr', 'en'])
+# REMOVE WARNINGS
+
+_stderr = sys.stderr
+sys.stderr = io.StringIO()
+reader = easyocr.Reader(['fr', 'en', 'de', 'es'], gpu=False)
+sys.stderr = _stderr
+
+# END OF REMOVE WARNINGS
+
 load_dotenv()
 console = Console()
 current_messages = ""
@@ -79,18 +92,32 @@ def chat_with_agent(message):
     )
 
     event_stream = response.get("completion")
+    first_chunk_received = threading.Event()
+
     with Live(console=console, refresh_per_second=10) as live:
+        def loading_animation():
+            frames = itertools.cycle([". ", ".. ", "... "])
+            while not first_chunk_received.is_set():
+                live.update(next(frames))
+                time.sleep(0.4)
+
+        loader = threading.Thread(target=loading_animation, daemon=True)
+        loader.start()
+
         for event in event_stream:
+            first_chunk_received.set()
             chunk = event.get("chunk")
             if chunk:
                 messages = chunk.get("bytes").decode()
                 current_messages += messages
                 live.update(chat_with_style(current_messages))
+
+        loader.join()
     print("\n")
 
 def get_title_crop(image_path: str):
     img = cv2.imread(image_path)
-    results = model(img)
+    results = model(img, verbose=False)
     found = False
     for r in results:
         for box in r.boxes:
